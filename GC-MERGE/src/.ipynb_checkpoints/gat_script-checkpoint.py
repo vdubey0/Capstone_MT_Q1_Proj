@@ -29,9 +29,6 @@ def setup_distributed():
 def cleanup_distributed():
     torch.distributed.destroy_process_group()
 
-def to_cpu_npy(tensor):
-    return tensor.cpu().detach().numpy()
-
 class GAT(nn.Module):
     def __init__(self, in_channels, hidden_channels, num_heads=3):
         super(GAT, self).__init__()
@@ -50,7 +47,12 @@ class GAT(nn.Module):
         x = self.ff2(x)
         return x
 
-def train_model(model, loss_fn, optimizer, loader, scaler, max_epoch, device):
+def to_cpu_npy(tensor):
+    return tensor.cpu().detach().numpy()
+
+def train_model(model, loss_fn, optimizer, loader, scaler, max_epoch, device, gene_mask):
+    gene_mask = gene_mask.to(device)
+
     for epoch in range(max_epoch):
         model.train()
         epoch_loss = 0
@@ -61,8 +63,11 @@ def train_model(model, loss_fn, optimizer, loader, scaler, max_epoch, device):
 
             with autocast():
                 out = model(batch)
-                loss = loss_fn(out[batch.train_mask], batch.y[batch.train_mask])
-            
+
+                # Apply train_mask first, then gene_mask
+                valid_mask = batch.train_mask & gene_mask[batch.train_mask]
+                loss = loss_fn(out[valid_mask], batch.y[valid_mask])
+
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
@@ -71,7 +76,9 @@ def train_model(model, loss_fn, optimizer, loader, scaler, max_epoch, device):
 
         print(f"Epoch {epoch + 1}/{max_epoch}, Loss: {epoch_loss / len(loader):.4f}")
 
-def evaluate_model(model, loader, device):
+def evaluate_model(model, loader, device, gene_mask):
+    gene_mask = gene_mask.to(device)
+
     model.eval()
     all_preds, all_labels = [], []
 
@@ -80,13 +87,17 @@ def evaluate_model(model, loader, device):
             batch = batch.to(device)
             with autocast():
                 out = model(batch)
-                preds = torch.argmax(F.softmax(out[batch.test_mask], dim=1), dim=1)
+
+                # Apply test_mask first, then gene_mask
+                valid_mask = batch.test_mask & gene_mask[batch.test_mask]
+                preds = torch.argmax(F.softmax(out[valid_mask], dim=1), dim=1)
                 all_preds.append(to_cpu_npy(preds))
-                all_labels.append(to_cpu_npy(batch.y[batch.test_mask]))
+                all_labels.append(to_cpu_npy(batch.y[valid_mask]))
 
     all_preds = np.concatenate(all_preds)
     all_labels = np.concatenate(all_labels)
 
+    # Compute metrics
     auroc = roc_auc_score(all_labels, all_preds, average="micro")
     acc = np.mean(all_preds == all_labels)
     return {"AUROC": auroc, "Accuracy": acc}
@@ -114,13 +125,17 @@ def main():
 
     geneNodes_labs = np.load(np_nodes_lab_genes_file)
     geneNodes = geneNodes_labs[:, -2].astype(int)
-    allLabs = -1 * np.ones(np.shape(allNodes))
-    allLabs[geneNodes] = geneNodes_labs[:, -1].astype(int)
+    allLabs = -1 * np.ones(np.shape(allNodes))  # Default to -1 (non-gene nodes)
+    allLabs[geneNodes] = geneNodes_labs[:, -1].astype(int)  # Assign 0 or 1 to gene nodes
     Y = torch.tensor(allLabs).long()
 
     edge_index, edge_attr = torch_geometric.utils.from_scipy_sparse_matrix(mat)
     G = Data(edge_index=edge_index, edge_attr=edge_attr, x=X, y=Y)
 
+    # Mask for gene-containing nodes
+    gene_mask = G.y >= 0  # True for valid gene nodes, False for -1
+
+    # Graph preprocessing
     G.edge_index, _ = remove_self_loops(G.edge_index)
     num_edges = G.edge_index.size(1)
     perm = torch.randperm(num_edges)[:int(0.5 * num_edges)]
@@ -144,10 +159,12 @@ def main():
     loss_fn = nn.CrossEntropyLoss()
     scaler = GradScaler()
 
-    train_model(gat, loss_fn, optimizer, loader, scaler, max_epoch=20, device=device)
+    # Train the model
+    train_model(gat, loss_fn, optimizer, loader, scaler, max_epoch=10, device=device, gene_mask=gene_mask)
 
+    # Evaluate the model
     if local_rank == 0:
-        results = evaluate_model(gat, loader, device)
+        results = evaluate_model(gat, loader, device, gene_mask)
         print(f"Test Results: {results}")
 
     cleanup_distributed()
