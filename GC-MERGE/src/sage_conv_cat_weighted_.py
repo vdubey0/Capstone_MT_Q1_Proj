@@ -43,9 +43,11 @@ class SAGEConvCat(MessagePassing):
     }
     """
     def __init__(self, in_channels: Union[int, Tuple[int, int]],
-                 out_channels: int, normalize: bool = False,
+                 out_channels: int, num_nodes: int, num_edges: int,
+                 normalize: bool = False,
                  bias: bool = True, **kwargs):  # yapf: disable
-        super(SAGEConvCat, self).__init__(aggr='add', **kwargs)
+        
+        super(SAGEConvCat, self).__init__(aggr='mean', **kwargs)
 
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -57,7 +59,8 @@ class SAGEConvCat(MessagePassing):
             in_channels = (in_channels, in_channels)
 
         self.lin_l = Linear(in_channels[0]*2, out_channels, bias=bias)
-        
+        self.edge_weights = torch.nn.Parameter(torch.rand(num_edges, dtype=torch.float32))
+        self.num_nodes = num_nodes
         
         self.reset_parameters()
 
@@ -69,13 +72,15 @@ class SAGEConvCat(MessagePassing):
             torch.nn.init.xavier_uniform_(self.attention_weights)
 
     def forward(self, x: Union[Tensor, OptPairTensor], edge_index: Adj,
-                size: Size = None) -> Tensor:
+                train_status: bool, size: Size = None) -> Tensor:
 
-        #changed
-        if self.weights_init == False:
-            self.edge_weights = torch.nn.Parameter(torch.rand(x.shape[0], dtype=torch.float32))
-            self.weights_init = True
+        self.training_status = train_status
         
+        # if self.weights_init == False:
+        #     self.edge_weights = torch.nn.Parameter(torch.rand(edge_index.shape[1], dtype=torch.float32))
+        #     self.num_nodes = x.shape[0]
+        #     self.weights_init = True
+
         out = self.propagate(edge_index, x=x, size=size)
 
         ### Concatenation
@@ -85,6 +90,7 @@ class SAGEConvCat(MessagePassing):
         if self.normalize:
             out = F.normalize(out, p=2., dim=-1)
 
+        
         return out
 
     def message(self, x_j: Tensor) -> Tensor:
@@ -92,18 +98,15 @@ class SAGEConvCat(MessagePassing):
 
     def message_and_aggregate(self, adj_t: SparseTensor,
                               x: OptPairTensor) -> Tensor:
-        #changed
-        coo = adj_t.coo()
-        row_indices = coo[0]
-        col_indices = coo[1]
-
-        row_sum = torch.zeros(4, dtype=torch.float32).scatter_add(0, row_indices, edge_weights)
-        row_sum = row_sum + 1e-8
-        normalized_weights = self.edge_weights / row_sum[row_indices]
-        adj_t = adj_t.set_value(normalized_weights)
         
-        #adj_t = adj_t.set_value(None, layout=None)
-        return matmul(adj_t, x[0], reduce=self.aggr)
+        #self.edge_weights = F.dropout(self.edge_weights, p=0.1, training=self.training_status)
+            
+        adj_t = adj_t.set_value(self.edge_weights)
+        out = matmul(adj_t, x[0], reduce=self.aggr)
+        out = F.leaky_relu(out)
+        
+        return out
+
 
     def __repr__(self):
         return '{}({}, {})'.format(self.__class__.__name__, self.in_channels,
