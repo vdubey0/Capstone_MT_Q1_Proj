@@ -42,39 +42,28 @@ class SAGEConvCat(MessagePassing):
       year={2019},
     }
     """
+    
     def __init__(self, in_channels: Union[int, Tuple[int, int]],
                  out_channels: int, normalize: bool = False,
                  bias: bool = True, **kwargs):  # yapf: disable
-        super(SAGEConvCat, self).__init__(aggr='add', **kwargs)
+        super(SAGEConvCat, self).__init__(aggr='mean', **kwargs)
 
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.normalize = normalize
-        self.weights_init = False
-        #self.inp_size = 10
 
         if isinstance(in_channels, int):
             in_channels = (in_channels, in_channels)
 
         self.lin_l = Linear(in_channels[0]*2, out_channels, bias=bias)
         
-        
         self.reset_parameters()
 
     def reset_parameters(self):
         self.lin_l.reset_parameters()
 
-        #changed
-        if self.weights_init:
-            torch.nn.init.xavier_uniform_(self.attention_weights)
-
     def forward(self, x: Union[Tensor, OptPairTensor], edge_index: Adj,
                 size: Size = None) -> Tensor:
-
-        #changed
-        if self.weights_init == False:
-            self.edge_weights = torch.nn.Parameter(torch.rand(x.shape[0], dtype=torch.float32))
-            self.weights_init = True
         
         out = self.propagate(edge_index, x=x, size=size)
 
@@ -92,17 +81,7 @@ class SAGEConvCat(MessagePassing):
 
     def message_and_aggregate(self, adj_t: SparseTensor,
                               x: OptPairTensor) -> Tensor:
-        #changed
-        coo = adj_t.coo()
-        row_indices = coo[0]
-        col_indices = coo[1]
-
-        row_sum = torch.zeros(4, dtype=torch.float32).scatter_add(0, row_indices, edge_weights)
-        row_sum = row_sum + 1e-8
-        normalized_weights = self.edge_weights / row_sum[row_indices]
-        adj_t = adj_t.set_value(normalized_weights)
-        
-        #adj_t = adj_t.set_value(None, layout=None)
+        adj_t = adj_t.set_value(None, layout=None)
         return matmul(adj_t, x[0], reduce=self.aggr)
 
     def __repr__(self):
