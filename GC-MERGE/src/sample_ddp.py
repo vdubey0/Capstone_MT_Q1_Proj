@@ -130,10 +130,11 @@ def main(rank, world_size, dataset, targetNode_mask, train_idx, valid_idx, test_
 
     inp_size = 6
     # hyperparameter tuning:
-    hidden_sizes = [6, 30]
-    dropout_rate = 0.2
-    n_heads = 4
-    learning_rate = 5e-3
+    hidden_sizes = [8, 50]
+    dropout_rate = 0.1
+    n_heads = 3
+    learning_rate = 0.002
+    wd = 1e-05
 
     
     if rank == 0:
@@ -148,7 +149,7 @@ def main(rank, world_size, dataset, targetNode_mask, train_idx, valid_idx, test_
     model = GAT(6, [6, 30], dropout_rate=dropout_rate, num_heads=n_heads).to(device)
     model = DDP(model, device_ids=[rank])
 
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay = wd)
     criterion = nn.CrossEntropyLoss()
 
     train_losses, valid_losses = train_model_classification(

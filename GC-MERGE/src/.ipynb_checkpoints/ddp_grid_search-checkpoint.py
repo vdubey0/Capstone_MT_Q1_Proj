@@ -131,15 +131,17 @@ def main(rank, world_size, dataset, targetNode_mask, train_idx, valid_idx, test_
 
     inp_size = 6
     # Hyperparameters
-    hidden_sizes = [[6, 30], [8, 50]]
+    # hidden_sizes = [[6, 30], [8, 50]]
+    hidden_sizes = [[8, 50]]
     dropout_rate = [0.10, 0.20, 0.30, 0.40]
-    n_heads = [1, 2, 3, 4]
+    # n_heads = [1, 2, 3, 4]
+    n_heads = [3, 4, 5]
     learning_rate = [1e-3, 2e-3, 1e-2, 2e-2]
     weight_decay = [0, 1e-5, 1e-4, 1e-3]
     optimizers = ['Adam']
 
     # Open results file in append mode
-    log_file = "gridsearch_results.txt"
+    log_file = "gridsearch_results2.txt"
 
     for hidden_channel, dr, n_head, lr, wd, opt in itertools.product(
         hidden_sizes, dropout_rate, n_heads, learning_rate, weight_decay, optimizers
@@ -154,16 +156,7 @@ def main(rank, world_size, dataset, targetNode_mask, train_idx, valid_idx, test_
             ).to(device)
             model = DDP(model, device_ids=[rank])
 
-            # Select optimizer
-            if opt == 'Adam':
-                optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
-            elif opt == 'SGD':
-                optimizer = optim.SGD(model.parameters(), lr=lr, weight_decay=wd)
-            elif opt == 'AdamW':
-                optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
-            else:
-                raise ValueError(f"Unknown optimizer: {opt}")
-
+            optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
             criterion = nn.CrossEntropyLoss()
 
             # Train and validate
@@ -203,7 +196,7 @@ def main(rank, world_size, dataset, targetNode_mask, train_idx, valid_idx, test_
                 with open(log_file, "a") as f:
                     f.write(
                         f"ERROR   | Hidden: {hidden_channel}, Dropout: {dr}, Heads: {n_head}, "
-                        f"LR: {lr}, WD: {wd}, Optimizer: {opt}, Error: {error_msg}\n"
+                        f"LR: {lr}, WD: {wd}, Optimizer: {opt}\n"
                     )
 
 # Run the DDP training across multiple processes (2 GPUs)
