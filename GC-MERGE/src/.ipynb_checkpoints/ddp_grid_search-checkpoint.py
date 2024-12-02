@@ -13,7 +13,8 @@ import pandas as pd
 from scipy.sparse import load_npz
 from torch.nn.parallel import DistributedDataParallel as DDP
 from sklearn.metrics import roc_auc_score, precision_recall_curve, auc
-
+import itertools
+import traceback
 
 class GAT(nn.Module):
     def __init__(self, in_channels, hidden_channels, num_heads=5, dropout_rate=0.2):
@@ -129,46 +130,83 @@ def main(rank, world_size, dataset, targetNode_mask, train_idx, valid_idx, test_
         print("No GPU available")
 
     inp_size = 6
-    # hyperparameter tuning:
-    hidden_sizes = [6, 30]
-    dropout_rate = 0.2
-    n_heads = 4
-    learning_rate = 5e-3
+    # Hyperparameters
+    hidden_sizes = [[6, 30], [8, 50]]
+    dropout_rate = [0.10, 0.20, 0.30, 0.40]
+    n_heads = [1, 2, 3, 4]
+    learning_rate = [1e-3, 2e-3, 1e-2, 2e-2]
+    weight_decay = [0, 1e-5, 1e-4, 1e-3]
+    optimizers = ['Adam']
 
-    
-    if rank == 0:
-        print('\nGAT Model:')
-        print('Input Size: ', inp_size)
-        print('Hidden Size: ', hidden_sizes)
-        print('Number of Heads: ', n_heads)
-        print('Dropout Rate: ', dropout_rate)
-        print('Learning Rate: ', learning_rate)
-        print('\n')
+    # Open results file in append mode
+    log_file = "gridsearch_results.txt"
 
-    model = GAT(6, [6, 30], dropout_rate=dropout_rate, num_heads=n_heads).to(device)
-    model = DDP(model, device_ids=[rank])
+    for hidden_channel, dr, n_head, lr, wd, opt in itertools.product(
+        hidden_sizes, dropout_rate, n_heads, learning_rate, weight_decay, optimizers
+    ):
+        try:
+            # Initialize the model
+            model = GAT(
+                in_channels=inp_size,
+                hidden_channels=hidden_channel,
+                dropout_rate=dr,
+                num_heads=n_head,
+            ).to(device)
+            model = DDP(model, device_ids=[rank])
 
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    criterion = nn.CrossEntropyLoss()
+            # Select optimizer
+            if opt == 'Adam':
+                optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
+            elif opt == 'SGD':
+                optimizer = optim.SGD(model.parameters(), lr=lr, weight_decay=wd)
+            elif opt == 'AdamW':
+                optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
+            else:
+                raise ValueError(f"Unknown optimizer: {opt}")
 
-    train_losses, valid_losses = train_model_classification(
-        model,
-        criterion,
-        dataset,
-        max_epoch=1500,
-        targetNode_mask=targetNode_mask,
-        train_idx=train_idx,
-        valid_idx=valid_idx,
-        optimizer=optimizer,
-        device=device,
-    )
-    
-    test_out = eval_model_classification(model, dataset, targetNode_mask, train_idx, test_idx, device)
+            criterion = nn.CrossEntropyLoss()
 
-    if rank == 0:
-        print(f'\nTest AUROC: {test_out["test_AUROC"]}')
+            # Train and validate
+            train_losses, valid_losses = train_model_classification(
+                model,
+                criterion,
+                dataset,
+                max_epoch=1500,
+                targetNode_mask=targetNode_mask,
+                train_idx=train_idx,
+                valid_idx=valid_idx,
+                optimizer=optimizer,
+                device=device,
+            )
+            
+            # Test the model
+            test_out = eval_model_classification(
+                model, dataset, targetNode_mask, train_idx, test_idx, device
+            )
 
-# Running the DDP training across multiple processes (2 GPUs)
+            if rank == 0:
+                test_auroc = test_out["test_AUROC"]
+                print(f"\nTest AUROC: {test_auroc}")
+                
+                # Log successful results
+                with open(log_file, "a") as f:
+                    f.write(
+                        f"SUCCESS | Hidden: {hidden_channel}, Dropout: {dr}, Heads: {n_head}, "
+                        f"LR: {lr}, WD: {wd}, Optimizer: {opt}, Test AUROC: {test_auroc}\n"
+                    )
+
+        except Exception as e:
+            # Log errors
+            if rank == 0:
+                error_msg = traceback.format_exc()
+                print(f"ERROR: {error_msg}")
+                with open(log_file, "a") as f:
+                    f.write(
+                        f"ERROR   | Hidden: {hidden_channel}, Dropout: {dr}, Heads: {n_head}, "
+                        f"LR: {lr}, WD: {wd}, Optimizer: {opt}, Error: {error_msg}\n"
+                    )
+
+# Run the DDP training across multiple processes (2 GPUs)
 if __name__ == '__main__':
     cell_line = 'E116'
     regression_flag = 0

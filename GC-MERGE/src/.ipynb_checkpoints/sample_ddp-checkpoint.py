@@ -120,10 +120,19 @@ def main(rank, world_size, dataset, targetNode_mask, train_idx, valid_idx, test_
 
     device = torch.device(f"cuda:{rank}")
 
+    if torch.cuda.is_available():
+        gpu_count = torch.cuda.device_count()
+        for i in range(gpu_count):
+            device_name = torch.cuda.get_device_name(i)
+            print(f"GPU {i}: {device_name}")
+    else:
+        print("No GPU available")
+
     inp_size = 6
+    # hyperparameter tuning:
     hidden_sizes = [6, 30]
     dropout_rate = 0.2
-    n_heads = 5
+    n_heads = 4
     learning_rate = 5e-3
 
     
