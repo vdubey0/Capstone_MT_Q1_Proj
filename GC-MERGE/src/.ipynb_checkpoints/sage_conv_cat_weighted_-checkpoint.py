@@ -43,7 +43,7 @@ class SAGEConvCat(MessagePassing):
     }
     """
     def __init__(self, in_channels: Union[int, Tuple[int, int]],
-                 out_channels: int, num_nodes: int, num_edges: int,
+                 out_channels: int, num_nodes: int, edge_attr: Tensor,
                  normalize: bool = False,
                  bias: bool = True, **kwargs):  # yapf: disable
         
@@ -59,7 +59,7 @@ class SAGEConvCat(MessagePassing):
             in_channels = (in_channels, in_channels)
 
         self.lin_l = Linear(in_channels[0]*2, out_channels, bias=bias)
-        self.edge_weights = torch.nn.Parameter(torch.rand(num_edges, dtype=torch.float32))
+        self.edge_weights = torch.nn.Parameter(edge_attr)
         self.num_nodes = num_nodes
         
         self.reset_parameters()

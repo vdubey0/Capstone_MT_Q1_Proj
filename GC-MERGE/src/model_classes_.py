@@ -19,7 +19,7 @@ from sage_conv_cat_weighted_ import SAGEConvCat
 
 class GCN_classification(nn.Module):
 
-    def __init__(self, num_feat, num_graph_conv_layers, graph_conv_layer_sizes, num_lin_layers, lin_hidden_sizes, num_classes, num_nodes, num_edges):
+    def __init__(self, num_feat, num_graph_conv_layers, graph_conv_layer_sizes, num_lin_layers, lin_hidden_sizes, num_classes, num_nodes, edge_attr):
         '''
         Defines classification model class
 
@@ -45,14 +45,14 @@ class GCN_classification(nn.Module):
         self.dropout_value = 0.5
 
         if self.num_graph_conv_layers == 1:
-            self.conv1 = SAGEConvCat(graph_conv_layer_sizes[0], graph_conv_layer_sizes[1], num_nodes, num_edges)
+            self.conv1 = SAGEConvCat(graph_conv_layer_sizes[0], graph_conv_layer_sizes[1], num_nodes, edge_attr)
         elif self.num_graph_conv_layers == 2:
-            self.conv1 = SAGEConvCat(graph_conv_layer_sizes[0], graph_conv_layer_sizes[1], num_nodes, num_edges)
-            self.conv2 = SAGEConvCat(graph_conv_layer_sizes[1], graph_conv_layer_sizes[2], num_nodes, num_edges)
+            self.conv1 = SAGEConvCat(graph_conv_layer_sizes[0], graph_conv_layer_sizes[1], num_nodes, edge_attr)
+            self.conv2 = SAGEConvCat(graph_conv_layer_sizes[1], graph_conv_layer_sizes[2], num_nodes, edge_attr)
         elif self.num_graph_conv_layers == 3:
-            self.conv1 = SAGEConvCat(graph_conv_layer_sizes[0], graph_conv_layer_sizes[1], num_nodes, num_edges)
-            self.conv2 = SAGEConvCat(graph_conv_layer_sizes[1], graph_conv_layer_sizes[2], num_nodes, num_edges)
-            self.conv3 = SAGEConvCat(graph_conv_layer_sizes[2], graph_conv_layer_sizes[3], num_nodes, num_edges)
+            self.conv1 = SAGEConvCat(graph_conv_layer_sizes[0], graph_conv_layer_sizes[1], num_nodes, edge_attr)
+            self.conv2 = SAGEConvCat(graph_conv_layer_sizes[1], graph_conv_layer_sizes[2], num_nodes, edge_attr)
+            self.conv3 = SAGEConvCat(graph_conv_layer_sizes[2], graph_conv_layer_sizes[3], num_nodes, edge_attr)
         
         if self.num_lin_layers == 1:
             self.lin1 = nn.Linear(lin_hidden_sizes[0], lin_hidden_sizes[1])
