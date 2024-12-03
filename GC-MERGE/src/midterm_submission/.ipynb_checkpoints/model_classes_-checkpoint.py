@@ -17,9 +17,7 @@ import torch.nn as nn
 
 from sage_conv_cat_ import SAGEConvCat
 
-
 class GCN_regression(nn.Module):
-
     def __init__(self, num_feat, num_graph_conv_layers, graph_conv_layer_sizes, num_lin_layers, lin_hidden_sizes, num_classes):
         '''
         Defines regression model class

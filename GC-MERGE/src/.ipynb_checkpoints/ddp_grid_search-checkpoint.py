@@ -132,7 +132,7 @@ def main(rank, world_size, dataset, targetNode_mask, train_idx, valid_idx, test_
     inp_size = 6
     # Hyperparameters
     # hidden_sizes = [[6, 30], [8, 50]]
-    hidden_sizes = [[8, 50]]
+    hidden_sizes = [[6, 30], [8, 50]]
     dropout_rate = [0.10, 0.20, 0.30, 0.40]
     # n_heads = [1, 2, 3, 4]
     n_heads = [3, 4, 5]

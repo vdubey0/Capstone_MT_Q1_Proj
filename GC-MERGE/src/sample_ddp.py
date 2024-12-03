@@ -19,8 +19,8 @@ class GAT(nn.Module):
     def __init__(self, in_channels, hidden_channels, num_heads=5, dropout_rate=0.2):
         super(GAT, self).__init__()
         self.gat1 = GATConv(in_channels, hidden_channels[0], heads=num_heads, concat=True)
-        self.gat2 = GATConv(hidden_channels[0] * num_heads, hidden_channels[1], heads=num_heads, concat=False)
-        #self.gat3 = GATConv(hidden_channels[1] * num_heads, hidden_channels[2], heads=num_heads, concat=False)
+        self.gat2 = GATConv(hidden_channels[0] * num_heads, hidden_channels[1], heads=num_heads, concat=True)
+        self.gat3 = GATConv(hidden_channels[1] * num_heads, hidden_channels[2], heads=num_heads, concat=False)
         
         self.ff1 = nn.Linear(hidden_channels[-1], hidden_channels[-1] // 2)
         self.ff2 = nn.Linear(hidden_channels[-1] // 2, 2)
@@ -32,8 +32,8 @@ class GAT(nn.Module):
         x = self.dropout(x)
         x = torch.relu(self.gat2(x, edge_index, edge_attr))
         x = self.dropout(x)
-        # x = torch.relu(self.gat3(x, edge_index, edge_attr))
-        # x = self.dropout(x)
+        x = torch.relu(self.gat3(x, edge_index, edge_attr))
+        x = self.dropout(x)
         x = torch.relu(self.ff1(x))
         x = self.ff2(x)
         return x
@@ -130,10 +130,10 @@ def main(rank, world_size, dataset, targetNode_mask, train_idx, valid_idx, test_
 
     inp_size = 6
     # hyperparameter tuning:
-    hidden_sizes = [8, 50]
-    dropout_rate = 0.1
+    hidden_sizes = [6, 24, 42]
+    dropout_rate = 0.3
     n_heads = 3
-    learning_rate = 0.002
+    learning_rate = 0.01
     wd = 1e-05
 
     
@@ -146,7 +146,7 @@ def main(rank, world_size, dataset, targetNode_mask, train_idx, valid_idx, test_
         print('Learning Rate: ', learning_rate)
         print('\n')
 
-    model = GAT(6, [6, 30], dropout_rate=dropout_rate, num_heads=n_heads).to(device)
+    model = GAT(6, hidden_sizes, dropout_rate=dropout_rate, num_heads=n_heads).to(device)
     model = DDP(model, device_ids=[rank])
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay = wd)
