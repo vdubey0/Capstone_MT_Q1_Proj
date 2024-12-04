@@ -17,6 +17,7 @@ from torch_geometric.nn.conv import GATConv
 
 import matplotlib.pyplot as plt
 
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 if torch.cuda.is_available():
@@ -77,9 +78,11 @@ valid_n_loader = NeighborLoader(G, num_neighbors = [10, 10], batch_size = 64, in
 
 def to_cpu_npy(x):
     return x.cpu().detach().numpy()
-    
+
 def train_model_classification(model, loss, train_loader, valid_loader, max_epoch, optimizer, train_idx = train_idx, valid_idx = valid_idx):
     model = model.to(device)
+
+    train_losses = []
 
     for epoch in range(max_epoch):
         model.train()
@@ -88,8 +91,14 @@ def train_model_classification(model, loss, train_loader, valid_loader, max_epoc
             optimizer.zero_grad()
             train_batch_mask = torch.isin(batch.n_id, targetNode_mask)
 
-            all_batch_scores = model(batch)[train_batch_mask]
-            return all_batch_scores
+            train_batch_scores = model(batch)[train_batch_mask]
+            train_batch_labels = to_cpu_npy(batch.y[train_batch_mask])
+            train_batch_loss = loss(train_batch_scores, torch.LongTensor(train_batch_labels).to(device))
+            train_losses.append(train_batch_loss.item())
+
+            train_batch_loss.backward()
+            optimizer.step()
+        print(f'Epoch {epoch}: Train Loss = {train_batch_loss}')
 
 def eval_model_classification(model, graph, targetNode_mask, train_idx, valid_idx, test_idx):
     model = model.to(device)
@@ -151,7 +160,7 @@ class GAT(nn.Module):
 
 num_heads = 4
 learning_rate = 0.002
-max_epoch = 1500
+max_epoch = 12
 loss = nn.CrossEntropyLoss()
 hidden_channels=[6, 30]
 wd = 1e-05
@@ -161,11 +170,20 @@ gat = GAT(in_channels=6, hidden_channels=hidden_channels, num_heads = num_heads)
 optimizer = torch.optim.Adam(filter(lambda p : p.requires_grad, gat.parameters()), lr = learning_rate, weight_decay = wd)
 
 print(train_model_classification(gat, loss, train_n_loader, valid_n_loader, max_epoch, optimizer))
-# train_losses, valid_losses = train_model_classification(gat, loss, train_n_loader, valid_n_loader, max_epoch, optimizer)
 
-# out = eval_model_classification(gat, G, targetNode_mask, train_idx, valid_idx, test_idx)
 
-# print(out)
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
