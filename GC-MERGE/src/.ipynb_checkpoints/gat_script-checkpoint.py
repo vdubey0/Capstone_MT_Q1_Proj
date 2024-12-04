@@ -151,13 +151,13 @@ class GAT(nn.Module):
         # First GAT layer
         self.gat1 = GATConv(in_channels, hidden_channels[0], heads=num_heads, concat=True)
         # Second GAT layer
-        self.gat2 = GATConv(hidden_channels[0] * num_heads, hidden_channels[1], heads=num_heads, concat=True)
+        self.gat2 = GATConv(hidden_channels[0] * num_heads, hidden_channels[1], heads=num_heads, concat=False)
         # Third GAT layer
-        self.gat3 = GATConv(hidden_channels[1] * num_heads, hidden_channels[2], heads=num_heads, concat=False)
+        # self.gat3 = GATConv(hidden_channels[1] * num_heads, hidden_channels[2], heads=num_heads, concat=False)
 
         # Fully connected layers
-        self.ff1 = nn.Linear(hidden_channels[2], hidden_channels[2] // 2)
-        self.ff2 = nn.Linear(hidden_channels[2] // 2, 2)
+        self.ff1 = nn.Linear(hidden_channels[1], hidden_channels[1] // 2)
+        self.ff2 = nn.Linear(hidden_channels[1] // 2, 2)
         self.dropout = nn.Dropout(p=0.5)
 
     def forward(self, data):
@@ -165,21 +165,23 @@ class GAT(nn.Module):
         # Pass through GAT layers
         x = torch.relu(self.gat1(x, edge_index, edge_attr))
         x = torch.relu(self.gat2(x, edge_index, edge_attr))
-        x = torch.relu(self.gat3(x, edge_index, edge_attr))
+        # x = torch.relu(self.gat3(x, edge_index, edge_attr))
         # Apply dropout and pass through the fully connected layers
         x = self.dropout(x)
         x = torch.relu(self.ff1(x))
         x = self.ff2(x)
         return x
 
-learning_rate = 1e-3
-max_epoch = 10
+num_heads = 4
+learning_rate = 0.002
+max_epoch = 1500
 loss = nn.CrossEntropyLoss()
-hidden_channels=[16, 32, 64]
+hidden_channels=[6, 30]
+wd = 1e-05
 
-gat = GAT(in_channels=6, hidden_channels=hidden_channels)
+gat = GAT(in_channels=6, hidden_channels=hidden_channels, num_heads = num_heads)
 
-optimizer = torch.optim.Adam(filter(lambda p : p.requires_grad, gat.parameters()), lr = learning_rate)
+optimizer = torch.optim.Adam(filter(lambda p : p.requires_grad, gat.parameters()), lr = learning_rate, weight_decay = wd)
 
 train_losses, valid_losses = train_model_classification(gat, loss, G, max_epoch, learning_rate, targetNode_mask, train_idx, valid_idx, optimizer)
 

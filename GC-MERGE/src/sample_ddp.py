@@ -130,10 +130,10 @@ def main(rank, world_size, dataset, targetNode_mask, train_idx, valid_idx, test_
 
     inp_size = 6
     # hyperparameter tuning:
-    hidden_sizes = [6, 24, 42]
-    dropout_rate = 0.3
-    n_heads = 3
-    learning_rate = 0.01
+    hidden_sizes = [6, 30]
+    dropout_rate = 0.1
+    n_heads = 4
+    learning_rate = 0.002
     wd = 1e-05
 
     

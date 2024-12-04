@@ -72,47 +72,24 @@ train_idx = pred_idx_shuff[:fin_train]
 valid_idx = pred_idx_shuff[fin_train:fin_valid]
 test_idx = pred_idx_shuff[fin_valid:]
 
+train_n_loader = NeighborLoader(G, num_neighbors = [10, 10], batch_size = 64, input_nodes = targetNode_mask[train_idx], shuffle = True)
+valid_n_loader = NeighborLoader(G, num_neighbors = [10, 10], batch_size = 64, input_nodes = targetNode_mask[valid_idx], shuffle = False)
+
 def to_cpu_npy(x):
     return x.cpu().detach().numpy()
     
-def train_model_classification(model, loss, graph, max_epoch, learning_rate, targetNode_mask, train_idx, valid_idx, optimizer):
+def train_model_classification(model, loss, train_loader, valid_loader, max_epoch, optimizer, train_idx = train_idx, valid_idx = valid_idx):
     model = model.to(device)
-    graph = graph.to(device)
 
-    optimizer = optimizer
-    
-    train_labels = to_cpu_npy(graph.y[targetNode_mask[train_idx]])
-    valid_labels = to_cpu_npy(graph.y[targetNode_mask[valid_idx]])
-    
-    model.train()
-    train_status = True
-    
-    print('\n')
-
-    train_losses = []
-    valid_losses = []
-    for e in list(range(max_epoch)):
+    for epoch in range(max_epoch):
         model.train()
-        optimizer.zero_grad()
+        for batch in train_loader:
+            batch = batch.to(device)
+            optimizer.zero_grad()
+            train_batch_mask = torch.isin(batch.n_id, targetNode_mask)
 
-        all_scores = model(graph)[targetNode_mask]
-        train_scores = all_scores[train_idx]
-        
-        train_loss = loss(train_scores, torch.LongTensor(train_labels).to(device))
-        train_losses.append(train_loss.item())
-
-        train_loss.backward()
-        optimizer.step()
-
-        model.eval()
-        valid_scores = all_scores[valid_idx]
-        valid_loss = loss(valid_scores, torch.LongTensor(valid_labels).to(device))
-        valid_losses.append(valid_loss.item())
-
-        if e%100 == 0:
-            print(f'Epoch {e}: Train Loss = {train_loss}, Valid Loss = {valid_loss}')
-
-    return train_losses, valid_losses
+            all_batch_scores = model(batch)[train_batch_mask]
+            return all_batch_scores
 
 def eval_model_classification(model, graph, targetNode_mask, train_idx, valid_idx, test_idx):
     model = model.to(device)
@@ -183,11 +160,12 @@ gat = GAT(in_channels=6, hidden_channels=hidden_channels, num_heads = num_heads)
 
 optimizer = torch.optim.Adam(filter(lambda p : p.requires_grad, gat.parameters()), lr = learning_rate, weight_decay = wd)
 
-train_losses, valid_losses = train_model_classification(gat, loss, G, max_epoch, learning_rate, targetNode_mask, train_idx, valid_idx, optimizer)
+print(train_model_classification(gat, loss, train_n_loader, valid_n_loader, max_epoch, optimizer))
+# train_losses, valid_losses = train_model_classification(gat, loss, train_n_loader, valid_n_loader, max_epoch, optimizer)
 
-out = eval_model_classification(gat, G, targetNode_mask, train_idx, valid_idx, test_idx)
+# out = eval_model_classification(gat, G, targetNode_mask, train_idx, valid_idx, test_idx)
 
-print(out)
+# print(out)
 
 
 
