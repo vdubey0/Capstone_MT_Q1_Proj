@@ -3,7 +3,7 @@ from typing import Union, Tuple
 from torch_geometric.typing import OptPairTensor, Adj, Size
 
 from torch import Tensor
-from torch.nn import Linear
+import torch.nn as nn
 import torch.nn.functional as F
 from torch_sparse import SparseTensor, matmul
 from torch_geometric.nn.conv import MessagePassing
@@ -55,7 +55,7 @@ class SAGEConvCat(MessagePassing):
         if isinstance(in_channels, int):
             in_channels = (in_channels, in_channels)
 
-        self.lin_l = Linear(in_channels[0]*2, out_channels, bias=bias)
+        self.lin_l = nn.Linear(in_channels[0]*2, out_channels, bias=bias)
         
         self.reset_parameters()
 
