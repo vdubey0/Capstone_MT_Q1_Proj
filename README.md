@@ -1,1 +1,0 @@
-Please view midterm report notebook for the final notebook, and also see cnn.ipynb for the cnn implementation. Cnn_1, cnn_test, and cnn_new are all experiment files written prior to the final implementation of cnn. 
